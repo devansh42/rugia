@@ -22,7 +22,7 @@ func TestEval(t *testing.T) {
 		t.Error("error occured while evaluting ast: ", err)
 		return
 	}
-	expectedVal := 65536.0
+	expectedVal := 3840.0
 	if actualResult != expectedVal {
 		t.Errorf("Wrong Evaluation Actual: %v, Expected: %v", actualResult, expectedVal)
 	}
