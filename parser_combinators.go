@@ -43,114 +43,46 @@ func parseUnary(pr *parser) *astNode {
 
 }
 
+// exponent -> unary ( ("**") unary )*
 func parseExponent(pr *parser) *astNode {
-	log.Print("inside exponent")
-
-	leftUnary := parseUnary(pr) // consume first unary
-	var parent = leftUnary
-
-	for token := pr.peek(); token.tokenType == RaisePower; token = pr.peek() {
-
-		if pr.eof() {
-			break // we are just breaking the rule as we in the recusrive expansion of (**) unary
-		}
-		pr.next() // consume  **
-		// not checkig for eof as we have checked while calling peek()
-		rightUnary := parseExponent(pr)
-
-		parent = newASTNode(token, parent, rightUnary, evalInfix) // exponent is right associated operation for us
-	}
-	return parent
+	return parseCombinator(pr, evalInfix, parseUnary, RaisePower)
 }
 
 // factor -> exponent ( ( "/" | "*" | "%" ) exponent)*
 func parseFactor(pr *parser) *astNode {
-	log.Print("inside factor")
-
-	leftExponent := parseExponent(pr) // consume first unary
-	var parent = leftExponent
-
-	for token := pr.peek(); token.tokenType == Mod || token.tokenType == Asterisk || token.tokenType == Slash; token = pr.peek() {
-
-		if pr.eof() {
-			break // we are just breaking the rule as we in the recusrive expansion of (*|/) unary
-		}
-		pr.next() // consume  * or /
-		// not checkig for eof as we have checked while calling peek()
-		rightExponent := parseFactor(pr) // Makr
-
-		parent = newASTNode(token, parent, rightExponent, evalInfix)
-	}
-	return parent
+	return parseCombinator(pr, evalInfix, parseExponent, Mod, Asterisk, Slash)
 }
 
 // term -> factor (( "+" | "-" ) factor)*
 func parseTerm(pr *parser) *astNode {
-	log.Print("inside term")
-	leftUnary := parseFactor(pr) // consume first unary
-	var parent = leftUnary
-	log.Print("Peek Token : ", pr.peek())
-	for token := pr.peek(); token.tokenType == Plus || token.tokenType == Minus; token = pr.peek() {
-		log.Print("Inside Loop")
-		if pr.eof() {
-			break // we are just breaking the rule as we in the recusrive expansion of (+|-) factor
-		}
-
-		pr.next() // consume + or -
-		rightUnary := parseTerm(pr)
-
-		parent = newASTNode(token, parent, rightUnary, evalInfix)
-
-	}
-	log.Print("Out of Loop")
-	return parent
-
+	return parseCombinator(pr, evalInfix, parseFactor, Plus, Minus)
 }
 
 // comparison ->  term (( ">" | ">=" | "<" | "<=" ) term)*
 func parseComp(pr *parser) *astNode {
-	log.Print("inside comp")
-	leftUnary := parseTerm(pr) // consume first unary
-	var parent = leftUnary
-	for {
-		token := pr.peek()
-		if pr.eof() {
-			break // we are just breaking the rule as we in the recusrive expansion of (>|>=|<|<=) term
-		}
-
-		switch token.tokenType {
-		case LT, GT, LTEQ, GTEQ:
-			pr.next() // consume  > or >= or < or <=
-			rightUnary := parseComp(pr)
-
-			parent = newASTNode(token, parent, rightUnary, evalInfix)
-		default:
-
-			return parent
-		}
-
-	}
-	return parent
+	return parseCombinator(pr, evalInfix, parseTerm, LT, GT, LTEQ, GTEQ)
 }
 
 // expr -> comparison ( ( "==" | "!=" ) comparison )*
 func parseExpr(pr *parser) *astNode {
-	log.Print("inside expr")
+	return parseCombinator(pr, evalInfix, parseComp, Eq, NotEq)
+}
 
-	leftUnary := parseComp(pr) // consume first unary
-	var parent = leftUnary
-
-	for token := pr.peek(); token.tokenType == Eq || token.tokenType == NotEq; token = pr.peek() {
-		if pr.eof() {
-			break // we are just breaking the rule as we in the recusrive expansion of (== or !=) comparison
-		}
-
-		pr.next() // consume == or !=
-		rightUnary := parseExpr(pr)
-
-		parent = newASTNode(token, parent, rightUnary, evalInfix)
-
+func parseCombinator(pr *parser, evalr evaluator, nonterminalParser parserFn, matchableTokens ...TokenType) *astNode {
+	var tokenMap = make(map[TokenType]struct{}, len(matchableTokens))
+	for _, token := range matchableTokens {
+		tokenMap[token] = struct{}{}
 	}
-	return parent
-
+	var fn parserFn
+	fn = func(pr *parser) *astNode {
+		parent := nonterminalParser(pr) // parsing first part of the grammar e.g. in grammar E -> F ( operator E )* parses F
+		token := pr.peek()
+		_, ok := tokenMap[token.tokenType]
+		if !pr.eof() && ok {
+			pr.next() // consume token
+			return newASTNode(token, parent, fn(pr), evalr)
+		}
+		return parent
+	}
+	return fn(pr)
 }
