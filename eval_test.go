@@ -6,7 +6,7 @@ import (
 )
 
 func TestEval(t *testing.T) {
-	lexer := NewLexer(bytes.NewReader([]byte("(2*3*2+32) == 8")))
+	lexer := NewLexer(bytes.NewReader([]byte("(2+3)*(6/2)*(4**4**(4-3))")))
 
 	err := lexer.Analyze()
 	if err != nil {
@@ -22,7 +22,7 @@ func TestEval(t *testing.T) {
 		t.Error("error occured while evaluting ast: ", err)
 		return
 	}
-	expectedVal := false
+	expectedVal := 65536.0
 	if actualResult != expectedVal {
 		t.Errorf("Wrong Evaluation Actual: %v, Expected: %v", actualResult, expectedVal)
 	}

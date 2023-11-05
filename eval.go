@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"math"
 	"strconv"
 )
 
@@ -13,6 +14,20 @@ func eval(ast *astNode) (any, error) {
 
 func evalNumber(ast *astNode) (any, error) {
 	return strconv.ParseFloat(string(ast.token.val), 64)
+}
+
+func evalUnary(ast *astNode) (any, error) {
+	right, err := eval(ast.right)
+	if err != nil {
+		return nil, err
+	}
+	switch ast.token.tokenType {
+	case Minus:
+		return -right.(float64), nil
+	case Not:
+		return !right.(bool), nil
+	}
+	return nil, nil
 }
 
 func evalInfix(ast *astNode) (any, error) {
@@ -43,6 +58,9 @@ func evalInfix(ast *astNode) (any, error) {
 	case Mod:
 		return float64(int64(leftF) % int64(rightF)), nil
 
+	case RaisePower:
+		return math.Pow(leftF, rightF), nil
+
 	case LT:
 		return leftF < rightF, nil
 	case GT:
@@ -53,7 +71,9 @@ func evalInfix(ast *astNode) (any, error) {
 		return leftF >= rightF, nil
 	case Eq:
 		return leftF == rightF, nil
+	case NotEq:
+		return leftF != rightF, nil
 
 	}
-	return 0, nil // Need to take care of this
+	return nil, nil // Need to take care of this
 }

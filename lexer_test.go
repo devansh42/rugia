@@ -12,7 +12,7 @@ func TestLexer(t *testing.T) {
 			NewToken(Plus, '+'),
 			NewToken(Number, []byte("2.343")...),
 		},
-		"(<><=>= ===> =)": {
+		"(<><=>= ===> = != !)": {
 			NewToken(LeftBrace, '('),
 			NewToken(LT, '<'),
 			NewToken(GT, '>'),
@@ -22,6 +22,8 @@ func TestLexer(t *testing.T) {
 			NewToken(Assign, '='),
 			NewToken(GT, '>'),
 			NewToken(Assign, '='),
+			NewToken(NotEq, '!', '='),
+			NewToken(Not, '!'),
 			NewToken(RightBrace, ')'),
 		},
 	}

@@ -27,92 +27,84 @@ func (lexer *Lexer) addT(token Token) {
 	lexer.tokenList = append(lexer.tokenList, token)
 }
 
-func (lexer *Lexer) retriveByte() byte {
-	bytes, err := lexer.reader.Peek(lexer.unProcessedBytes)
-	if err != nil {
-		lexer.lastErr = err
-		return 0
-	}
-	if lexer.unProcessedBytes > 0 {
-		return bytes[lexer.unProcessedBytes-1]
-	}
-	return 0
-}
-
 func (lexer *Lexer) eof() bool {
 	return lexer.lastErr != nil && lexer.lastErr == io.EOF
 }
 
-func (lexer *Lexer) nextByte() byte {
-	lexer.unProcessedBytes++
-	return lexer.retriveByte()
-}
-func (lexer *Lexer) prevByte() byte {
-	lexer.unProcessedBytes--
-	return lexer.retriveByte()
+func (lexer *Lexer) next() byte {
+	by, err := lexer.reader.ReadByte()
+	if err != nil {
+		lexer.lastErr = err
+		return 0
+	}
+	return by
 }
 
-func (lexer *Lexer) drain() {
-	_, lexer.lastErr = lexer.reader.Discard(lexer.unProcessedBytes)
-	lexer.unProcessedBytes = 0
+func (lexer *Lexer) peek() byte {
+	by, err := lexer.reader.Peek(1)
+	if err != nil {
+		lexer.lastErr = err
+		return 0
+	}
+	return by[0]
 }
 
 func (lexer *Lexer) anaEq() {
-	nextByte := lexer.nextByte()
+	nextByte := lexer.peek()
 	if !lexer.eof() && nextByte == '=' {
+		lexer.next() // consume
 		lexer.addT(NewToken(Eq, '=', '='))
 		return
 	}
 	lexer.addT(NewToken(Assign, '='))
-	lexer.prevByte()
 }
 
 func (lexer *Lexer) anaAsterisk() {
-	nextByte := lexer.nextByte()
+	nextByte := lexer.peek()
 	if !lexer.eof() && nextByte == '*' {
+		lexer.next() // consume
 		lexer.addT(NewToken(RaisePower, '*', '*'))
 		return
 	}
 	lexer.addT(NewToken(Asterisk, '*'))
-	lexer.prevByte()
 }
 
 func (lexer *Lexer) anaNot() {
-	nextByte := lexer.nextByte()
+	nextByte := lexer.peek()
 	if !lexer.eof() && nextByte == '=' {
+		lexer.next() // consume
 		lexer.addT(NewToken(NotEq, '!', '='))
 		return
 	}
 	lexer.addT(NewToken(Not, '!'))
-	lexer.prevByte()
 }
 
 func (lexer *Lexer) anaLT() {
-	nextByte := lexer.nextByte()
+	nextByte := lexer.peek()
 	if !lexer.eof() && nextByte == '=' {
+		lexer.next() //consume
 		lexer.addT(NewToken(LTEQ, '<', '='))
 		return
 	}
 	lexer.addT(NewToken(LT, '<'))
-	lexer.prevByte()
 
 }
 
 func (lexer *Lexer) anaGT() {
-	nextByte := lexer.nextByte()
+	nextByte := lexer.peek()
 	if !lexer.eof() && nextByte == '=' {
+		lexer.next() //consume
 		lexer.addT(NewToken(GTEQ, '>', '='))
 		return
 	}
 	lexer.addT(NewToken(GT, '>'))
-	lexer.prevByte()
 
 }
 
 func (lexer *Lexer) anaComment() {
 	lexer.addT(NewToken(CommentHash, '#'))
 	for {
-		nextByte := lexer.nextByte()
+		nextByte := lexer.next()
 		if lexer.eof() || nextByte == '\n' { // Read until next line
 			return
 		}
@@ -124,10 +116,12 @@ func (lexer *Lexer) anaDigits(startingDigit byte) error {
 	var fractionStarted bool
 
 	for {
-		nextByte := lexer.nextByte()
+		nextByte := lexer.peek()
 		if isDigit(nextByte) {
+			lexer.next() // consume
 			number = append(number, nextByte)
 		} else if nextByte == '.' {
+			lexer.next() //consume
 			if fractionStarted {
 				return illegalToken
 			}
@@ -136,7 +130,6 @@ func (lexer *Lexer) anaDigits(startingDigit byte) error {
 
 		} else {
 			lexer.addT(NewToken(Number, number...))
-			lexer.prevByte()
 			return nil
 		}
 	}
@@ -152,8 +145,7 @@ func isWhiteSpace(b byte) bool {
 }
 
 func (lexer *Lexer) Analyze() error {
-	for ; lexer.lastErr == nil; lexer.drain() {
-		nextByte := lexer.nextByte()
+	for nextByte := lexer.next(); lexer.lastErr == nil; nextByte = lexer.next() {
 
 		switch nextByte {
 		case '+':
@@ -180,6 +172,8 @@ func (lexer *Lexer) Analyze() error {
 			lexer.anaLT()
 		case '>':
 			lexer.anaGT()
+		case '!':
+			lexer.anaNot()
 		default:
 			if isDigit(nextByte) {
 				err := lexer.anaDigits(nextByte)

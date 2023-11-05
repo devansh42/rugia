@@ -27,29 +27,48 @@ func parsePrimary(pr *parser) *astNode {
 	return nil
 }
 
-// unary -> (-) unary | priamry
+// unary -> (- | !) unary | priamry
 func parseUnary(pr *parser) *astNode {
 	log.Print("inside unary")
 	token := pr.peek()
 	if pr.eof() {
 		return nil
 	}
-	if token.tokenType == Minus { // (-) unary
-		pr.next() // consuming minus
-		// not checking for eof as we have checked while calling peek()
-		return newASTNode(token, newASTNode(NewToken(Number, '0'), nilASTNode, nilASTNode, evalNumber), parseUnary(pr), evalInfix)
+	if token.tokenType == Minus || token.tokenType == Not {
+		pr.next() // consume minus or not
+		return newASTNode(token, nilASTNode, parseUnary(pr), evalUnary)
 	}
 
 	return parsePrimary(pr)
 
 }
 
-// factor -> unary ( ( "/" | "*" | "%" ) unary)*
-func parseFactor(pr *parser) *astNode {
-	log.Print("inside factor")
+func parseExponent(pr *parser) *astNode {
+	log.Print("inside exponent")
 
 	leftUnary := parseUnary(pr) // consume first unary
 	var parent = leftUnary
+
+	for token := pr.peek(); token.tokenType == RaisePower; token = pr.peek() {
+
+		if pr.eof() {
+			break // we are just breaking the rule as we in the recusrive expansion of (**) unary
+		}
+		pr.next() // consume  **
+		// not checkig for eof as we have checked while calling peek()
+		rightUnary := parseExponent(pr)
+
+		parent = newASTNode(token, parent, rightUnary, evalInfix) // exponent is right associated operation for us
+	}
+	return parent
+}
+
+// factor -> exponent ( ( "/" | "*" | "%" ) exponent)*
+func parseFactor(pr *parser) *astNode {
+	log.Print("inside factor")
+
+	leftExponent := parseExponent(pr) // consume first unary
+	var parent = leftExponent
 
 	for token := pr.peek(); token.tokenType == Mod || token.tokenType == Asterisk || token.tokenType == Slash; token = pr.peek() {
 
@@ -58,9 +77,9 @@ func parseFactor(pr *parser) *astNode {
 		}
 		pr.next() // consume  * or /
 		// not checkig for eof as we have checked while calling peek()
-		rightUnary := parseUnary(pr)
+		rightExponent := parseFactor(pr) // Makr
 
-		parent = newASTNode(token, parent, rightUnary, evalInfix)
+		parent = newASTNode(token, parent, rightExponent, evalInfix)
 	}
 	return parent
 }
@@ -78,7 +97,7 @@ func parseTerm(pr *parser) *astNode {
 		}
 
 		pr.next() // consume + or -
-		rightUnary := parseFactor(pr)
+		rightUnary := parseTerm(pr)
 
 		parent = newASTNode(token, parent, rightUnary, evalInfix)
 
@@ -102,7 +121,7 @@ func parseComp(pr *parser) *astNode {
 		switch token.tokenType {
 		case LT, GT, LTEQ, GTEQ:
 			pr.next() // consume  > or >= or < or <=
-			rightUnary := parseTerm(pr)
+			rightUnary := parseComp(pr)
 
 			parent = newASTNode(token, parent, rightUnary, evalInfix)
 		default:
@@ -114,20 +133,20 @@ func parseComp(pr *parser) *astNode {
 	return parent
 }
 
-// expr -> comparison ( ( "==" ) comparison )*
+// expr -> comparison ( ( "==" | "!=" ) comparison )*
 func parseExpr(pr *parser) *astNode {
 	log.Print("inside expr")
 
 	leftUnary := parseComp(pr) // consume first unary
 	var parent = leftUnary
 
-	for token := pr.peek(); token.tokenType == Eq; token = pr.peek() {
+	for token := pr.peek(); token.tokenType == Eq || token.tokenType == NotEq; token = pr.peek() {
 		if pr.eof() {
-			break // we are just breaking the rule as we in the recusrive expansion of (==) comparison
+			break // we are just breaking the rule as we in the recusrive expansion of (== or !=) comparison
 		}
 
-		pr.next() // consume ==
-		rightUnary := parseComp(pr)
+		pr.next() // consume == or !=
+		rightUnary := parseExpr(pr)
 
 		parent = newASTNode(token, parent, rightUnary, evalInfix)
 
